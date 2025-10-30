@@ -1,0 +1,185 @@
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.event.*;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+
+public class SimpleChatClient extends JFrame {
+
+    private final JTextArea chatArea;
+    private final JTextField inputField;
+    private final JButton sendButton;
+    private final JButton clearButton;
+    private final DefaultListModel<String> usersModel;
+    private final JList<String> usersList;
+    private final DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    public SimpleChatClient() {
+        super("Simple Chat Client (UI Only)");
+
+        // Frame basics
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        setSize(700, 450);
+        setLocationRelativeTo(null); // center on screen
+        setLayout(new BorderLayout(8, 8));
+
+        // Window close confirmation
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                int ans = JOptionPane.showConfirmDialog(SimpleChatClient.this,
+                        "Are you sure you want to exit?", "Exit",
+                        JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                if (ans == JOptionPane.YES_OPTION) {
+                    dispose();
+                    System.exit(0);
+                }
+            }
+        });
+
+        // ---------- Left: user list ----------
+        usersModel = new DefaultListModel<>();
+        // sample users
+        usersModel.addElement("Alice");
+        usersModel.addElement("Bob");
+        usersModel.addElement("Charlie");
+        usersModel.addElement("You (local)");
+
+        usersList = new JList<>(usersModel);
+        usersList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        usersList.setBorder(BorderFactory.createTitledBorder("Participants"));
+        usersList.setFixedCellWidth(140);
+
+        // double-click to mention a user
+        usersList.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    String name = usersList.getSelectedValue();
+                    if (name != null) {
+                        inputField.setText(inputField.getText() + "@" + name + " ");
+                        inputField.requestFocusInWindow();
+                    }
+                }
+            }
+        });
+
+        add(new JScrollPane(usersList), BorderLayout.WEST);
+
+        // ---------- Center: chat display ----------
+        chatArea = new JTextArea();
+        chatArea.setEditable(false);
+        chatArea.setLineWrap(true);
+        chatArea.setWrapStyleWord(true);
+        chatArea.setBorder(new EmptyBorder(8, 8, 8, 8));
+        chatArea.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        JScrollPane chatScroll = new JScrollPane(chatArea);
+        chatScroll.setBorder(BorderFactory.createTitledBorder("Chat"));
+        add(chatScroll, BorderLayout.CENTER);
+
+        // ---------- Bottom: input panel ----------
+        JPanel inputPanel = new JPanel(new BorderLayout(6, 6));
+        inputPanel.setBorder(new EmptyBorder(8, 8, 8, 8));
+
+        inputField = new JTextField();
+        inputField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        inputPanel.add(inputField, BorderLayout.CENTER);
+
+        // Send and Clear buttons
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 6, 6));
+        sendButton = new JButton("Send");
+        clearButton = new JButton("Clear");
+        buttons.add(sendButton);
+        buttons.add(clearButton);
+        inputPanel.add(buttons, BorderLayout.EAST);
+
+        add(inputPanel, BorderLayout.SOUTH);
+
+        // Make Send the default button so Enter will trigger it when focused in frame
+        getRootPane().setDefaultButton(sendButton);
+
+        // ---------- Event handlers ----------
+        // sendButton handler
+        sendButton.addActionListener(e -> sendMessage());
+
+        // clearButton handler
+        clearButton.addActionListener(e -> {
+            inputField.setText("");
+            inputField.requestFocusInWindow();
+        });
+
+        // Pressing Enter in the input field sends message (redundant because default button is set,
+        // but shown here to demonstrate explicit Key handling)
+        inputField.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                // send on Enter (also allow Shift+Enter for newline)
+                if (e.getKeyCode() == KeyEvent.VK_ENTER && !e.isShiftDown()) {
+                    e.consume(); // prevent newline
+                    sendMessage();
+                }
+            }
+        });
+
+        // Sample welcome message
+        appendSystemMessage("Welcome! This is a local chat UI demo. Double-click a username to mention them.");
+
+        setVisible(true);
+        inputField.requestFocusInWindow();
+    }
+
+    // Append user message to chatArea with timestamp
+    private void appendUserMessage(String user, String message) {
+        String time = LocalTime.now().format(timeFmt);
+        chatArea.append("[" + time + "] " + user + ": " + message + "\n");
+        autoScrollChat();
+    }
+
+    // Append system message (italic-like) - here just prefixed to distinguish
+    private void appendSystemMessage(String msg) {
+        String time = LocalTime.now().format(timeFmt);
+        chatArea.append("[" + time + "] * " + msg + "\n");
+        autoScrollChat();
+    }
+
+    // Ensure the chat scrolls to bottom after append
+    private void autoScrollChat() {
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar bar = ((JScrollPane) chatArea.getParent().getParent()).getVerticalScrollBar();
+            bar.setValue(bar.getMaximum());
+        });
+    }
+
+    // Validate and "send" the message (append locally)
+    private void sendMessage() {
+        String text = inputField.getText().trim();
+        if (text.isEmpty()) {
+            // simple feedback: flash input field border or show a beep
+            Toolkit.getDefaultToolkit().beep();
+            inputField.requestFocusInWindow();
+            return;
+        }
+
+        // For this mock client we always use "You (local)" as sender
+        appendUserMessage("You", text);
+
+        // Optionally, simulate an echo reply to demonstrate UI reaction (comment out if undesired)
+        simulateAutoReply(text);
+
+        inputField.setText("");
+        inputField.requestFocusInWindow();
+    }
+
+    // A tiny simulated reply so the UI feels interactive (not networking)
+    private void simulateAutoReply(String userText) {
+        // run on a short delay to simulate "someone" responding
+        Timer timer = new Timer(600, e -> appendUserMessage("Alice", "Echo: " + userText));
+        timer.setRepeats(false);
+        timer.start();
+    }
+
+    public static void main(String[] args) {
+        // Ensure GUI is created on EDT
+        SwingUtilities.invokeLater(SimpleChatClient::new);
+    }
+}
